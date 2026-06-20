@@ -1,0 +1,1019 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>CodeLens — AI Code Assistant</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css"/>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/marked/12.0.0/marked.min.js"></script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap');
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:       #0b0d14;
+      --bg2:      #12151f;
+      --bg3:      #1a1e2e;
+      --bg4:      #212540;
+      --border:   #252942;
+      --border2:  #2f3457;
+      --text:     #dde1f5;
+      --muted:    #6b6f8f;
+      --faint:    #3a3f5c;
+
+      --purple:   #9d8df8;
+      --purple-bg:#1e1a3a;
+      --teal:     #2dd4bf;
+      --teal-bg:  #0d2b2a;
+      --amber:    #f59e0b;
+      --amber-bg: #271e08;
+      --coral:    #f87171;
+      --coral-bg: #2a1313;
+      --blue:     #60a5fa;
+      --blue-bg:  #0d1e35;
+      --green:    #4ade80;
+      --green-bg: #0d2416;
+
+      --radius:   10px;
+      --radius-sm: 6px;
+    }
+
+    html, body { height: 100%; }
+
+    body {
+      font-family: 'Inter', -apple-system, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+      overflow: hidden;
+    }
+
+    /* ── HEADER ─────────────────────────────────── */
+    header {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 0 20px;
+      height: 52px;
+      border-bottom: 1px solid var(--border);
+      background: var(--bg2);
+      flex-shrink: 0;
+    }
+
+    .logo-mark {
+      width: 30px; height: 30px;
+      background: linear-gradient(135deg, #7c6af7 0%, #3b82f6 100%);
+      border-radius: 8px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 14px;
+      box-shadow: 0 0 16px rgba(124,106,247,0.35);
+    }
+
+    .logo-text { font-size: 15px; font-weight: 600; letter-spacing: -0.3px; }
+    .logo-text span { color: var(--purple); }
+
+    .header-pill {
+      margin-left: auto;
+      font-size: 11px; font-weight: 500;
+      color: var(--muted);
+      background: var(--bg3);
+      border: 1px solid var(--border2);
+      padding: 3px 10px;
+      border-radius: 20px;
+      display: flex; align-items: center; gap: 6px;
+    }
+
+    .live-dot {
+      width: 6px; height: 6px;
+      border-radius: 50%;
+      background: var(--green);
+      box-shadow: 0 0 6px var(--green);
+      animation: livepulse 2s ease-in-out infinite;
+    }
+
+    @keyframes livepulse { 0%,100%{opacity:1} 50%{opacity:.4} }
+
+    /* ── MAIN LAYOUT ────────────────────────────── */
+    .app {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      flex: 1;
+      overflow: hidden;
+      min-height: 0;
+    }
+
+    .pane { display: flex; flex-direction: column; overflow: hidden; min-height: 0; }
+    .pane-left { border-right: 1px solid var(--border); }
+
+    .pane-bar {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 0 14px;
+      height: 40px;
+      border-bottom: 1px solid var(--border);
+      background: var(--bg2);
+      flex-shrink: 0;
+      font-size: 11px;
+      font-weight: 500;
+      color: var(--muted);
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+    }
+
+    .pane-bar-icon { font-size: 13px; }
+
+    /* ── CODE EDITOR AREA ───────────────────────── */
+    .editor-wrap {
+      flex: 1;
+      display: flex;
+      overflow: hidden;
+      position: relative;
+      min-height: 0;
+    }
+
+    .line-numbers {
+      width: 44px;
+      padding: 14px 0;
+      background: var(--bg2);
+      border-right: 1px solid var(--border);
+      text-align: right;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 12px;
+      line-height: 1.7;
+      color: var(--faint);
+      overflow: hidden;
+      flex-shrink: 0;
+      user-select: none;
+    }
+
+    .line-numbers span { display: block; padding-right: 10px; }
+    .line-numbers span.changed { color: var(--amber); font-weight: 600; }
+
+    .editor-inner {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      position: relative;
+      overflow: hidden;
+    }
+
+    
+    .line-highlight-layer {
+      position: absolute;
+      top: 14px; left: 0; right: 0;
+      pointer-events: none;
+      z-index: 1;
+    }
+
+    .line-hl {
+      height: calc(1.7 * 12px); /* matches textarea line-height * font-size */
+      background: rgba(245, 158, 11, 0.08);
+      border-left: 2px solid var(--amber);
+      transition: opacity 0.3s;
+    }
+
+    textarea#code-input {
+      flex: 1;
+      background: transparent;
+      color: var(--text);
+      border: none;
+      outline: none;
+      resize: none;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 12px;
+      line-height: 1.7;
+      padding: 14px 14px;
+      tab-size: 2;
+      position: relative;
+      z-index: 2;
+      overflow-y: auto;
+    }
+
+    textarea::placeholder { color: var(--faint); }
+
+    /* ── CONTROLS ───────────────────────────────── */
+    .controls {
+      padding: 10px 14px;
+      border-top: 1px solid var(--border);
+      background: var(--bg2);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-shrink: 0;
+    }
+
+    .lang-chip {
+      font-size: 11px; font-weight: 500;
+      color: var(--purple);
+      background: var(--purple-bg);
+      border: 1px solid rgba(157,141,248,0.25);
+      padding: 3px 10px;
+      border-radius: 20px;
+      font-family: 'JetBrains Mono', monospace;
+    }
+
+    .run-btn {
+      margin-left: auto;
+      display: flex; align-items: center; gap: 7px;
+      padding: 8px 18px;
+      background: linear-gradient(135deg, #7c6af7, #5b8af7);
+      color: #fff;
+      border: none;
+      border-radius: var(--radius-sm);
+      font-size: 13px; font-weight: 600;
+      cursor: pointer;
+      transition: opacity 0.15s, transform 0.1s;
+      box-shadow: 0 2px 12px rgba(124,106,247,0.4);
+    }
+
+    .run-btn:hover { opacity: 0.9; transform: translateY(-1px); }
+    .run-btn:active { transform: translateY(0); }
+    .run-btn:disabled { opacity: 0.4; cursor: not-allowed; transform: none; }
+
+    .run-icon { font-size: 15px; }
+
+    /* ── RIGHT PANE ─────────────────────────────── */
+    .right-pane {
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      min-height: 0;
+    }
+
+    /* sticky top bar that holds collapsible panels */
+    .right-sticky {
+      flex-shrink: 0;
+      border-bottom: 1px solid var(--border);
+      background: var(--bg2);
+    }
+
+    /* collapsible section header */
+    .collapsible-hdr {
+      display: flex; align-items: center; gap: 8px;
+      padding: 7px 14px;
+      font-size: 10px; font-weight: 600; text-transform: uppercase;
+      letter-spacing: 0.08em; color: var(--muted);
+      cursor: pointer;
+      user-select: none;
+      border-top: 1px solid var(--border);
+      transition: background 0.15s;
+    }
+
+    .collapsible-hdr:first-child { border-top: none; }
+    .collapsible-hdr:hover { background: var(--bg3); }
+
+    .collapsible-hdr .chevron {
+      margin-left: auto;
+      font-size: 10px;
+      transition: transform 0.2s;
+      color: var(--faint);
+    }
+
+    .collapsible-hdr.collapsed .chevron { transform: rotate(-90deg); }
+
+    .collapsible-body {
+      overflow: hidden;
+      transition: max-height 0.25s ease, opacity 0.2s ease;
+      max-height: 300px;
+      opacity: 1;
+    }
+
+    .collapsible-body.collapsed { max-height: 0; opacity: 0; }
+
+    /* Complexity cards */
+    .complexity-cards {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+      padding: 4px 14px 10px;
+    }
+
+    .cx-card {
+      background: var(--bg3);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      padding: 8px 12px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      transition: all 0.3s;
+    }
+
+    .cx-card.active   { border-color: var(--amber); background: var(--amber-bg); }
+    .cx-card.improved { border-color: var(--green);  background: var(--green-bg); }
+
+    .cx-title { font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; }
+    .cx-val   { font-size: 16px; font-weight: 600; font-family: 'JetBrains Mono', monospace; color: var(--faint); }
+    .cx-card.active   .cx-val { color: var(--amber); }
+    .cx-card.improved .cx-val { color: var(--green); }
+    .cx-arrow { font-size: 10px; color: var(--faint); }
+    .cx-card.improved .cx-arrow { color: var(--green); }
+
+    /* Agent trace chips */
+    .trace-scroll {
+      display: flex; gap: 6px;
+      padding: 4px 14px 10px;
+      overflow-x: auto;
+      scrollbar-width: none;
+    }
+
+    .trace-scroll::-webkit-scrollbar { display: none; }
+
+    .trace-chip {
+      display: flex; align-items: center; gap: 5px;
+      padding: 4px 10px;
+      border-radius: 20px;
+      font-size: 11px; font-weight: 500;
+      white-space: nowrap;
+      border: 1px solid var(--border);
+      background: var(--bg3);
+      color: var(--muted);
+      opacity: 0.4;
+      transition: all 0.4s;
+      flex-shrink: 0;
+    }
+
+    .trace-chip.active { opacity: 1; }
+    .trace-chip.done   { opacity: 1; }
+
+    .trace-chip.router         { border-color: rgba(157,141,248,.4); color: var(--purple); background: var(--purple-bg); }
+    .trace-chip.security       { border-color: rgba(248,113,113,.4); color: var(--coral);  background: var(--coral-bg); }
+    .trace-chip.quality        { border-color: rgba(45,212,191,.4);  color: var(--teal);   background: var(--teal-bg); }
+    .trace-chip.logic          { border-color: rgba(245,158,11,.4);  color: var(--amber);  background: var(--amber-bg); }
+    .trace-chip.validator-pass { border-color: rgba(74,222,128,.4);  color: var(--green);  background: var(--green-bg); }
+    .trace-chip.validator-fail { border-color: rgba(248,113,113,.4); color: var(--coral);  background: var(--coral-bg); }
+    .trace-chip.synthesizer    { border-color: rgba(96,165,250,.4);  color: var(--blue);   background: var(--blue-bg); }
+
+    .chip-dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; flex-shrink: 0; }
+    .chip-spinning { animation: spin .8s linear infinite; display: inline-block; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* Diff panel */
+    .diff-legend { display: flex; gap: 12px; margin-left: auto; }
+    .diff-leg     { display: flex; align-items: center; gap: 4px; font-size: 10px; color: var(--muted); }
+    .diff-leg-dot { width: 8px; height: 8px; border-radius: 2px; }
+
+    .diff-body {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 11px;
+      line-height: 1.7;
+      padding: 4px 0 6px;
+    }
+
+    .diff-line { display: flex; padding: 0 14px; }
+    .diff-line.added   { background: rgba(74,222,128,0.08);  border-left: 2px solid var(--green); }
+    .diff-line.removed { background: rgba(248,113,113,0.08); border-left: 2px solid var(--coral); text-decoration: line-through; opacity: 0.6; }
+    .diff-line.context { border-left: 2px solid transparent; }
+
+    .diff-gutter { width: 32px; color: var(--faint); user-select: none; flex-shrink: 0; }
+    .diff-line.added   .diff-gutter { color: var(--green); }
+    .diff-line.removed .diff-gutter { color: var(--coral); }
+    .diff-code { color: var(--text); white-space: pre; overflow: hidden; text-overflow: ellipsis; }
+    .diff-line.added   .diff-code { color: #b9ffd1; }
+    .diff-line.removed .diff-code { color: #ffd1d1; }
+
+    /* ── OUTPUT — takes all remaining height, scrolls freely ── */
+    .output-scroll {
+      flex: 1;
+      overflow-y: auto;
+      min-height: 0;
+    }
+
+    .output-area {
+      padding: 18px 20px;
+      font-size: 13.5px;
+      line-height: 1.8;
+    }
+
+    .output-empty {
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      gap: 8px; color: var(--muted);
+      min-height: 200px; text-align: center;
+      padding: 40px 20px;
+    }
+
+    .output-empty-icon { font-size: 36px; opacity: 0.2; margin-bottom: 4px; }
+
+    .output-area h1 { font-size: 17px; font-weight: 600; color: var(--text); margin: 18px 0 8px; border-bottom: 1px solid var(--border); padding-bottom: 6px; }
+    .output-area h2 { font-size: 14px; font-weight: 600; color: var(--purple); margin: 16px 0 6px; display: flex; align-items: center; gap: 6px; }
+    .output-area h2::before { content:''; display:inline-block; width:3px; height:14px; background:var(--purple); border-radius:2px; }
+    .output-area h3 { font-size: 13px; font-weight: 600; color: var(--text); margin: 12px 0 4px; }
+    .output-area p { margin-bottom: 10px; color: #bbbdd8; }
+    .output-area ul, .output-area ol { padding-left: 22px; margin-bottom: 10px; color: #bbbdd8; }
+    .output-area li { margin-bottom: 5px; }
+    .output-area strong { color: var(--text); }
+    .output-area a { color: var(--blue); }
+
+    .output-area pre {
+      background: #0d1017 !important;
+      border: 1px solid var(--border2);
+      border-radius: var(--radius-sm);
+      padding: 14px 16px;
+      overflow-x: auto;
+      margin: 10px 0;
+      position: relative;
+    }
+
+    .output-area pre code { font-family: 'JetBrains Mono', monospace; font-size: 12px; line-height: 1.65; }
+
+    .output-area code:not(pre code) {
+      background: rgba(157,141,248,0.12);
+      border: 1px solid rgba(157,141,248,0.2);
+      color: var(--purple);
+      padding: 1px 5px;
+      border-radius: 4px;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 12px;
+    }
+
+    .copy-btn {
+      position: absolute; top: 8px; right: 8px;
+      background: var(--bg3); border: 1px solid var(--border2);
+      color: var(--muted); font-size: 10px; padding: 3px 8px;
+      border-radius: 4px; cursor: pointer;
+      font-family: 'Inter', sans-serif;
+      transition: all 0.15s;
+    }
+
+    .copy-btn:hover { color: var(--text); border-color: var(--purple); }
+
+    /* ── STATUS BAR ─────────────────────────────── */
+    .status-bar {
+      height: 28px;
+      display: flex; align-items: center; gap: 8px;
+      padding: 0 14px;
+      border-top: 1px solid var(--border);
+      background: var(--bg2);
+      font-size: 11px; color: var(--muted);
+      flex-shrink: 0;
+    }
+
+    .s-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--faint); }
+    .s-dot.running { background: var(--amber); animation: livepulse 1s ease-in-out infinite; }
+    .s-dot.done    { background: var(--green); }
+    .s-dot.error   { background: var(--coral); }
+
+    .cursor-blink {
+      display: inline-block; width: 2px; height: 14px;
+      background: var(--purple); margin-left: 2px;
+      vertical-align: middle;
+      animation: blink .8s step-end infinite;
+    }
+
+    @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0} }
+
+    /* scrollbars */
+    ::-webkit-scrollbar { width: 5px; height: 5px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 10px; }
+
+    /* responsive */
+    @media (max-width: 768px) {
+      .app { grid-template-columns: 1fr; grid-template-rows: 50vh 1fr; }
+      .pane-left { border-right: none; border-bottom: 1px solid var(--border); }
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <div class="logo-mark">&#9670;</div>
+  <span class="logo-text">Code<span>Lens</span></span>
+  <div class="header-pill">
+    <div class="live-dot"></div>
+    LangGraph &middot; Llama 3.3 70B &middot; Groq
+  </div>
+</header>
+
+<div class="app">
+
+  <!-- ── LEFT: CODE EDITOR ───────────────────── -->
+  <div class="pane pane-left">
+    <div class="pane-bar">
+      <span class="pane-bar-icon">&#9998;</span>
+      Code editor
+      <span class="lang-chip" id="lang-badge" style="margin-left:auto;text-transform:none;font-size:11px">auto</span>
+    </div>
+
+    <div class="editor-wrap">
+      <div class="line-numbers" id="line-numbers"></div>
+      <div class="editor-inner">
+        <div class="line-highlight-layer" id="hl-layer"></div>
+        <textarea id="code-input" spellcheck="false"
+          placeholder="Paste your code here...
+
+def login(username, password):
+    query = 'SELECT * FROM users WHERE name=' + username
+    result = db.execute(query)
+    if result:
+        return True
+
+# Try pasting any code — the graph picks which agents to run"></textarea>
+      </div>
+    </div>
+
+    <div class="controls">
+      <span style="font-size:11px;color:var(--muted)">Ctrl+Enter to run</span>
+      <button class="run-btn" id="run-btn" onclick="analyze()">
+        <span class="run-icon">&#9654;</span> Run analysis
+      </button>
+    </div>
+  </div>
+
+  <!-- ── RIGHT: ANALYSIS PANE ───────────────── -->
+  <div class="pane right-pane">
+    <div class="pane-bar">
+      <span class="pane-bar-icon">&#128202;</span>
+      Analysis
+    </div>
+
+    <!-- Collapsible sticky panels -->
+    <div class="right-sticky">
+
+      <!-- Complexity section -->
+      <div class="collapsible-hdr" id="hdr-cx" onclick="toggleSection('cx')">
+        &#128200; Complexity
+        <span class="chevron" id="chev-cx">&#9660;</span>
+      </div>
+      <div class="collapsible-body" id="body-cx">
+        <div class="complexity-cards">
+          <div class="cx-card" id="cx-time">
+            <div>
+              <div class="cx-title">Time</div>
+              <div class="cx-val" id="cx-time-val">—</div>
+            </div>
+            <div style="text-align:right">
+              <div class="cx-title">Improved</div>
+              <div class="cx-val" id="cx-time-imp" style="font-size:13px">—</div>
+              <div class="cx-arrow" id="cx-time-arrow">&#8595;</div>
+            </div>
+          </div>
+          <div class="cx-card" id="cx-space">
+            <div>
+              <div class="cx-title">Space</div>
+              <div class="cx-val" id="cx-space-val">—</div>
+            </div>
+            <div style="text-align:right">
+              <div class="cx-title">Improved</div>
+              <div class="cx-val" id="cx-space-imp" style="font-size:13px">—</div>
+              <div class="cx-arrow" id="cx-space-arrow">&#8595;</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Agent trace section -->
+      <div class="collapsible-hdr" id="hdr-trace" onclick="toggleSection('trace')">
+        &#9881; Agent trace
+        <span class="chevron" id="chev-trace">&#9660;</span>
+      </div>
+      <div class="collapsible-body" id="body-trace">
+        <div class="trace-scroll">
+          <div class="trace-chip" id="chip-router"><span class="chip-dot"></span> Router</div>
+          <div class="trace-chip" id="chip-security"><span class="chip-dot"></span> Security</div>
+          <div class="trace-chip" id="chip-quality"><span class="chip-dot"></span> Quality</div>
+          <div class="trace-chip" id="chip-logic"><span class="chip-dot"></span> Logic</div>
+          <div class="trace-chip" id="chip-validator"><span class="chip-dot"></span> Validator</div>
+          <div class="trace-chip" id="chip-synthesizer"><span class="chip-dot"></span> Synthesizer</div>
+        </div>
+      </div>
+
+      <!-- Diff section — hidden until results arrive -->
+      <div class="collapsible-hdr" id="hdr-diff" onclick="toggleSection('diff')" style="display:none">
+        &#9998; Suggested changes
+        <div class="diff-legend" onclick="event.stopPropagation()">
+          <div class="diff-leg"><div class="diff-leg-dot" style="background:var(--green)"></div> added</div>
+          <div class="diff-leg"><div class="diff-leg-dot" style="background:var(--coral)"></div> removed</div>
+        </div>
+        <span class="chevron" id="chev-diff">&#9660;</span>
+      </div>
+      <div class="collapsible-body" id="body-diff" style="display:none">
+        <div class="diff-body" id="diff-body"></div>
+      </div>
+
+    </div>
+
+    <!-- Output — expands to fill all remaining space -->
+    <div class="output-scroll">
+      <div id="output">
+        <div class="output-empty">
+          <div class="output-empty-icon">&#9670;</div>
+          <div style="font-size:14px;font-weight:500;color:var(--text)">Paste code and click Run</div>
+          <div style="font-size:12px">The graph fans out to specialist agents automatically</div>
+          <div style="font-size:11px;margin-top:4px;color:var(--faint)">Security &middot; Quality &middot; Logic &middot; Validator &middot; Synthesizer</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="status-bar">
+      <div class="s-dot" id="s-dot"></div>
+      <span id="s-text">Ready</span>
+    </div>
+  </div>
+
+</div>
+
+<script>
+const API = "http://localhost:8000";
+let detectTimeout = null;
+let lineCount = 0;
+
+/* ── LINE NUMBERS ─────────────────────────────────── */
+function updateLineNumbers() {
+  const ta = document.getElementById("code-input");
+  const lines = ta.value.split("\n");
+  const ln = document.getElementById("line-numbers");
+  if (lines.length === lineCount) return;
+  lineCount = lines.length;
+  ln.innerHTML = lines.map((_, i) =>
+    `<span id="ln${i+1}">${i + 1}</span>`
+  ).join("");
+}
+
+document.getElementById("code-input").addEventListener("input", () => {
+  updateLineNumbers();
+  onCodeChange();
+});
+
+document.getElementById("code-input").addEventListener("scroll", () => {
+  document.getElementById("line-numbers").scrollTop =
+    document.getElementById("code-input").scrollTop;
+});
+
+updateLineNumbers();
+
+/* ── LANGUAGE DETECT ──────────────────────────────── */
+function onCodeChange() {
+  clearTimeout(detectTimeout);
+  detectTimeout = setTimeout(async () => {
+    const code = document.getElementById("code-input").value.trim();
+    if (!code) { document.getElementById("lang-badge").textContent = "auto"; return; }
+    try {
+      const res = await fetch(`${API}/detect-language`, {
+        method:"POST", headers:{"Content-Type":"application/json"},
+        body: JSON.stringify({code})
+      });
+      const d = await res.json();
+      document.getElementById("lang-badge").textContent = d.language;
+    } catch {}
+  }, 500);
+}
+
+/* ── STATUS ───────────────────────────────────────── */
+function setStatus(state, text) {
+  document.getElementById("s-dot").className = "s-dot " + state;
+  document.getElementById("s-text").textContent = text;
+}
+
+/* ── COMPLEXITY PARSER ────────────────────────────── */
+function parseComplexity(text) {
+  const timeMatch = text.match(/time[^:]*:?\s*(O\([^)]+\))/i);
+  const spaceMatch = text.match(/space[^:]*:?\s*(O\([^)]+\))/i);
+  const improvedTimeMatch = text.match(/improved?\s*(?:time)?[^:]*:?\s*(O\([^)]+\))/i) ||
+                            text.match(/(?:after|optimization|optimized)[^O]*(O\([^)]+\))/i);
+  return {
+    time:  timeMatch  ? timeMatch[1]  : null,
+    space: spaceMatch ? spaceMatch[1] : null,
+    timeImproved:  improvedTimeMatch ? improvedTimeMatch[1] : null,
+    spaceImproved: null,
+  };
+}
+
+function updateComplexityCards(cx) {
+  const tCard = document.getElementById("cx-time");
+  const sCard = document.getElementById("cx-space");
+
+  if (cx.time) {
+    document.getElementById("cx-time-val").textContent = cx.time;
+    tCard.classList.add("active");
+  }
+  if (cx.timeImproved && cx.timeImproved !== cx.time) {
+    document.getElementById("cx-time-imp").textContent = cx.timeImproved;
+    document.getElementById("cx-time-arrow").textContent = "↓ improved";
+    tCard.classList.add("improved");
+    tCard.classList.remove("active");
+  } else {
+    document.getElementById("cx-time-imp").textContent = "—";
+  }
+
+  if (cx.space) {
+    document.getElementById("cx-space-val").textContent = cx.space;
+    sCard.classList.add("active");
+  }
+  if (cx.spaceImproved && cx.spaceImproved !== cx.space) {
+    document.getElementById("cx-space-imp").textContent = cx.spaceImproved;
+    document.getElementById("cx-space-arrow").textContent = "↓ improved";
+    sCard.classList.add("improved");
+    sCard.classList.remove("active");
+  } else {
+    document.getElementById("cx-space-imp").textContent = "—";
+  }
+}
+
+function resetComplexityCards() {
+  ["cx-time","cx-space"].forEach(id => {
+    document.getElementById(id).classList.remove("active","improved");
+  });
+  ["cx-time-val","cx-time-imp","cx-space-val","cx-space-imp"].forEach(id => {
+    document.getElementById(id).textContent = "—";
+  });
+  document.getElementById("cx-time-arrow").textContent = "↓";
+  document.getElementById("cx-space-arrow").textContent = "↓";
+}
+
+/* ── DIFF BUILDER ─────────────────────────────────── */
+function extractCodeFromMarkdown(text) {
+  const match = text.match(/```[\w]*\n([\s\S]*?)```/);
+  return match ? match[1] : null;
+}
+
+function buildDiff(original, refactored) {
+  const origLines = original.split("\n");
+  const newLines  = refactored.split("\n");
+  
+  
+  const hdr = document.getElementById("hdr-diff");
+  const bdyCollapsible = document.getElementById("body-diff");
+  const body  = document.getElementById("diff-body");
+
+  body.innerHTML = "";
+  let hasChanges = false;
+
+  const maxLen = Math.max(origLines.length, newLines.length);
+  for (let i = 0; i < Math.min(maxLen, 60); i++) {
+    const o = origLines[i] ?? "";
+    const n = newLines[i] ?? "";
+    const div = document.createElement("div");
+    if (o !== n) {
+      hasChanges = true;
+      if (o) {
+        const rem = document.createElement("div");
+        rem.className = "diff-line removed";
+        rem.innerHTML = `<span class="diff-gutter">- ${i+1}</span><span class="diff-code">${escHtml(o)}</span>`;
+        body.appendChild(rem);
+      }
+      if (n) {
+        const add = document.createElement("div");
+        add.className = "diff-line added";
+        add.innerHTML = `<span class="diff-gutter">+ ${i+1}</span><span class="diff-code">${escHtml(n)}</span>`;
+        body.appendChild(add);
+      }
+      
+      highlightLine(i + 1);
+    } else if (o) {
+      const ctx = document.createElement("div");
+      ctx.className = "diff-line context";
+      ctx.innerHTML = `<span class="diff-gutter">${i+1}</span><span class="diff-code" style="color:var(--faint)">${escHtml(o)}</span>`;
+      body.appendChild(ctx);
+    }
+  }
+
+  
+  if (hasChanges) {
+    hdr.style.display = "flex";
+    bdyCollapsible.style.display = "block";
+  } else {
+    hdr.style.display = "none";
+    bdyCollapsible.style.display = "none";
+  }
+}
+
+function escHtml(s) {
+  return s.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+}
+
+/* ── LINE HIGHLIGHTER ─────────────────────────────── */
+const highlightedLines = new Set();
+
+function highlightLine(lineNum) {
+  highlightedLines.add(lineNum);
+  const span = document.getElementById(`ln${lineNum}`);
+  if (span) span.classList.add("changed");
+  renderHighlightLayer();
+}
+
+function renderHighlightLayer() {
+  const ta = document.getElementById("code-input");
+  const layer = document.getElementById("hl-layer");
+  const lineH = 12 * 1.7; // font-size * line-height
+  layer.innerHTML = "";
+  highlightedLines.forEach(ln => {
+    const div = document.createElement("div");
+    div.style.cssText = `position:absolute;top:${(ln-1)*lineH}px;left:0;right:0;height:${lineH}px;background:rgba(245,158,11,0.07);border-left:2px solid var(--amber);pointer-events:none;`;
+    layer.appendChild(div);
+  });
+}
+
+function clearHighlights() {
+  highlightedLines.clear();
+  document.getElementById("hl-layer").innerHTML = "";
+  document.querySelectorAll("#line-numbers span.changed").forEach(s => s.classList.remove("changed"));
+}
+
+/* ── TRACE CHIPS ──────────────────────────────────── */
+const chipMap = {
+  router:     { id:"chip-router",      cls:"router" },
+  security:   { id:"chip-security",    cls:"security" },
+  quality:    { id:"chip-quality",     cls:"quality" },
+  logic:      { id:"chip-logic",       cls:"logic" },
+  validator:  { id:"chip-validator",   cls:"validator-pass" },
+  synthesizer:{ id:"chip-synthesizer", cls:"synthesizer" },
+};
+
+function resetChips() {
+  Object.values(chipMap).forEach(({ id }) => {
+    const el = document.getElementById(id);
+    el.className = "trace-chip";
+    el.querySelector(".chip-dot").style.cssText = "";
+    el.querySelector("span:last-child") && el.querySelector("span:last-child").remove();
+  });
+}
+
+function activateChip(key, isDone = false) {
+  const m = chipMap[key];
+  if (!m) return;
+  const el = document.getElementById(m.id);
+  el.className = `trace-chip ${m.cls} ${isDone ? "done" : "active"}`;
+}
+
+function processTraceLine(line) {
+  const lower = line.toLowerCase();
+  if (lower.includes("router selected")) activateChip("router", true);
+  else if (lower.includes("security agent")) activateChip("security", lower.includes("completed"));
+  else if (lower.includes("quality agent"))  activateChip("quality",  lower.includes("completed"));
+  else if (lower.includes("logic agent"))    activateChip("logic",    lower.includes("completed"));
+  else if (lower.includes("validator: passed")) {
+    const el = document.getElementById("chip-validator");
+    el.className = "trace-chip validator-pass done";
+  } else if (lower.includes("validator: failed")) {
+    const el = document.getElementById("chip-validator");
+    el.className = "trace-chip validator-fail active";
+  } else if (lower.includes("synthesizer")) activateChip("synthesizer", lower.includes("completed"));
+}
+
+/* ── COPY BUTTONS ─────────────────────────────────── */
+function addCopyButtons() {
+  document.querySelectorAll("#output pre").forEach(pre => {
+    if (pre.querySelector(".copy-btn")) return;
+    const btn = document.createElement("button");
+    btn.className = "copy-btn";
+    btn.textContent = "Copy";
+    btn.onclick = () => {
+      navigator.clipboard.writeText(pre.querySelector("code")?.innerText || pre.innerText);
+      btn.textContent = "Copied!";
+      setTimeout(() => btn.textContent = "Copy", 1500);
+    };
+    pre.appendChild(btn);
+  });
+}
+
+/* ── MAIN ANALYZE ─────────────────────────────────── */
+async function analyze() {
+  const code = document.getElementById("code-input").value.trim();
+  if (!code) { alert("Paste some code first."); return; }
+
+  const btn = document.getElementById("run-btn");
+  btn.disabled = true;
+  btn.innerHTML = '<span class="chip-spinning">&#8635;</span> Running...';
+
+  // Reset UI
+  resetChips();
+  resetComplexityCards();
+  clearHighlights();
+  expandAllSections();
+
+  document.getElementById("hdr-diff").style.display = "none";
+  document.getElementById("body-diff").style.display = "none";
+
+  const out = document.getElementById("output");
+  out.innerHTML = '<div class="output-area"><span class="cursor-blink"></span></div>';
+  setStatus("running", "LangGraph pipeline running...");
+
+  let outputText = "";
+  const originalCode = code;
+
+  try {
+    const res = await fetch(`${API}/analyze`, {
+      method:"POST",
+      headers:{"Content-Type":"application/json"},
+      body: JSON.stringify({
+        code,
+        language: document.getElementById("lang-badge").textContent
+      }),
+    });
+
+    if (!res.ok) {
+      const e = await res.json();
+      throw new Error(e.detail || "Server error");
+    }
+
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      const lines = decoder.decode(value, { stream:true }).split("\n");
+
+      for (const line of lines) {
+        if (!line.startsWith("data: ")) continue;
+        const data = line.slice(6);
+        if (data === "[DONE]") break;
+        try {
+          const json = JSON.parse(data);
+          if (json.type === "trace") {
+            processTraceLine(json.text);
+          } else if (json.type === "output") {
+            if (outputText === "") collapseForReading(); // collapse on first output chunk
+            outputText += json.text;
+            const wrap = document.createElement("div");
+            wrap.className = "output-area";
+            wrap.innerHTML = marked.parse(outputText) + '<span class="cursor-blink"></span>';
+            out.innerHTML = "";
+            out.appendChild(wrap);
+            hljs.highlightAll();
+            addCopyButtons();
+          }
+        } catch {}
+      }
+    }
+
+    // Final render
+    const wrap = document.createElement("div");
+    wrap.className = "output-area";
+    wrap.innerHTML = marked.parse(outputText);
+    out.innerHTML = "";
+    out.appendChild(wrap);
+    hljs.highlightAll();
+    addCopyButtons();
+
+    // Parse complexity from output
+    const cx = parseComplexity(outputText);
+    updateComplexityCards(cx);
+
+    // Build diff if refactored code found
+    const refactored = extractCodeFromMarkdown(outputText);
+    if (refactored) {
+      document.getElementById("hdr-diff").style.display = "flex";
+      document.getElementById("body-diff").style.display = "block";
+      buildDiff(originalCode, refactored);
+    }
+
+    setStatus("done", `Done · ${outputText.length} chars`);
+
+  } catch(err) {
+    out.innerHTML = `<div class="output-area">
+      <p style="color:var(--coral)">&#9888; Error: ${err.message}</p>
+      <p style="font-size:12px;color:var(--muted);margin-top:6px">Make sure the backend is running: <code>python main.py</code></p>
+    </div>`;
+    setStatus("error", "Error — is backend running?");
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = '<span class="run-icon">&#9654;</span> Run analysis';
+  }
+}
+
+/* ── COLLAPSIBLE SECTIONS ─────────────────────── */
+function toggleSection(key) {
+  const hdr  = document.getElementById(`hdr-${key}`);
+  const body = document.getElementById(`body-${key}`);
+  const chev = document.getElementById(`chev-${key}`);
+  const collapsed = body.classList.toggle("collapsed");
+  hdr.classList.toggle("collapsed", collapsed);
+}
+
+/* Auto-collapse upper panels when analysis starts to give output room */
+function collapseForReading() {
+  ["cx","trace"].forEach(key => {
+    const body = document.getElementById(`body-${key}`);
+    const hdr  = document.getElementById(`hdr-${key}`);
+    if (!body.classList.contains("collapsed")) {
+      body.classList.add("collapsed");
+      hdr.classList.add("collapsed");
+    }
+  });
+}
+
+/* Expand all panels back on reset */
+function expandAllSections() {
+  ["cx","trace"].forEach(key => {
+    document.getElementById(`body-${key}`).classList.remove("collapsed");
+    document.getElementById(`hdr-${key}`).classList.remove("collapsed");
+  });
+  // hide diff
+  document.getElementById("hdr-diff").style.display = "none";
+  document.getElementById("body-diff").style.display = "none";
+}
+
+document.addEventListener("keydown", e => {
+  if ((e.ctrlKey || e.metaKey) && e.key === "Enter") analyze();
+});
+</script>
+</body>
+</html>
